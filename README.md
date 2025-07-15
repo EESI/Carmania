@@ -17,9 +17,9 @@ CARMANIA is a self-supervised genomic language model framework that augments nex
 
 The following models are already available for use on [Hugging Face Hub](https://huggingface.co/MsAlEhR):
 
-- 🔬 [`MsAlEhR/carmania-big-10k-prok-genome`](https://huggingface.co/MsAlEhR/carmania-big-10k-prok-genome)  
-- 🧬 [`MsAlEhR/carmania-4k-scp-gene-taxa`](https://huggingface.co/MsAlEhR/carmania-4k-scp-gene-taxa)  
-- 🧠 [`MsAlEhR/carmania-160k-seqlen-human`](https://huggingface.co/MsAlEhR/carmania-160k-seqlen-human)
+- 🦠🧬 [`MsAlEhR/carmania-big-10k-prok-genome`](https://huggingface.co/MsAlEhR/carmania-big-10k-prok-genome)  
+- 🦠🧬 [`MsAlEhR/carmania-4k-scp-gene-taxa`](https://huggingface.co/MsAlEhR/carmania-4k-scp-gene-taxa)  
+- 👤🧬 [`MsAlEhR/carmania-160k-seqlen-human`](https://huggingface.co/MsAlEhR/carmania-160k-seqlen-human)
 
 ---
 
