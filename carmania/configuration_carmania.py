@@ -9,7 +9,7 @@ class CarmaniaConfig(PretrainedConfig):
         vocab_size=5,
         hidden_size=1024,
         intermediate_size=4608,
-        num_layers=12,
+        num_layers=5,
         num_attention_heads=16,
         num_key_value_heads=4,
         attention_window_size=128,

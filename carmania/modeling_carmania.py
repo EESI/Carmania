@@ -2,11 +2,11 @@ import math
 import torch
 import torch.nn as nn
 from transformers import PreTrainedModel
-from model import Block, RMSNorm
+from .model import Block, RMSNorm
 from transformers.activations import ACT2FN
 from typing import Optional, List, Dict, Tuple, Union
 from transformers.modeling_outputs import CausalLMOutput
-from carmania_configuration import CarmaniaConfig
+from .configuration_carmania import CarmaniaConfig
 
 
 class CarmaniaPreTrainedModel(PreTrainedModel):

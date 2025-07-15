@@ -9,8 +9,8 @@ from typing import List, Tuple, Optional
 import numpy as np
 from torch import nn
 from carmania.tokenization_carmania import CarmaniaTokenizer
-from carmania.carmania_modeling import CarmaniaModel
-from carmania.carmania_configuration import CarmaniaConfig
+from carmania.modeling_carmania import CarmaniaModel
+from carmania.configuration_carmania import CarmaniaConfig
 from carmania.loss import TMLoss
 
 class DNASequenceDataset(Dataset):
