@@ -73,7 +73,7 @@ class CarmaniaTokenizer(PreTrainedTokenizer):
         for char in text[:self.model_max_length]:
             idx = self.vocab.get(char, self.vocab['[PAD]'])
             token_ids.append(idx)
-            if self.calculate_bigram and prev is not None and idx < 4 and prev < 4:
+            if self.calculate_bigram and prev is not None and idx < self.vocab['[PAD]'] and prev < self.vocab['[PAD]']:
                 bigram_matrix[prev, idx] += 1
             prev = idx
 

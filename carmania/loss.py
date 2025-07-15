@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+
+
+
 class TMLoss(nn.Module):
     def __init__(self, epsilon=1e-6):
         super().__init__()
@@ -19,5 +23,5 @@ class TMLoss(nn.Module):
         pred_bigram += self.epsilon
         true_probs += self.epsilon
 
-        kl = (true_probs * (true_probs.log() - pred_bigram.log())).sum(dim=(-2, -1))
+        kl = torch.sum(true_probs * (torch.log(true_probs) - torch.log(pred_bigram)), dim=(-2, -1))
         return kl.mean()
