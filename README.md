@@ -9,7 +9,7 @@
 
 > 🚧 This repository is under active development and will be updated very soon with full training code, evaluation scripts, and usage examples. Stay tuned!
 
-CARMANIA is a self-supervised genomic language model framework that augments next-token prediction with a transition-matrix regularization loss. This integration improves biological sequence modeling by aligning predicted transitions with empirical k-mer statistics, allowing for better long-range dependency modeling and functional interpretation.
+CARMANIA is a self-supervised genomic language model framework that augments next-token prediction with a transition-matrix regularization loss. This integration improves biological sequence modeling by aligning predicted transitions with empirical bigram(2-mer) statistics, allowing for better long-range dependency modeling and functional interpretation.
 
 ---
 
