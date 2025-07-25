@@ -67,7 +67,7 @@ class CarmaniaTokenizer(PreTrainedTokenizer):
     def encode_with_bigram(self, text: str) -> Tuple[List[int], Optional[np.ndarray]]:
         text = text.upper()
         token_ids = []
-        bigram_matrix = np.zeros((4, 4), dtype=np.int16) if self.calculate_bigram else None
+        bigram_matrix = np.zeros((len(VOCAB)-1, len(VOCAB)-1), dtype=np.int16) if self.calculate_bigram else None
 
         prev = None
         for char in text[:self.model_max_length]:
