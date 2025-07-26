@@ -17,15 +17,13 @@ from transformers.utils.import_utils import is_torch_fx_available
 from torch.utils.checkpoint import checkpoint
 from functools import partial
 
+from flash_attn import flash_attn_func, flash_attn_varlen_func
+from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
 
 from einops import rearrange, repeat, reduce, pack, unpack
 from einops.layers.torch import Rearrange
 
 
-try:
-    from flash_attn import flash_attn_func
-except ImportError:
-    flash_attn_func = None
 
 
 def rotate_half(x):
@@ -52,6 +50,10 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """
+    This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
+    num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
+    """
     batch, num_key_value_heads, slen, head_dim = hidden_states.shape
     if n_rep == 1:
         return hidden_states
@@ -112,39 +114,40 @@ class RMSNorm(nn.Module):
 
 
 
+
+
 class Attention(nn.Module):
-    def __init__(
-        self,
-        num_attention_heads,
-        num_key_value_heads,
-        attention_head_size,
-        attention_window_size=None,
-        seq_length=None,
-        use_positional_embedding=False,
-        rope_base=None,
-    ):
+
+    def __init__(self, num_attention_heads, num_key_value_heads, attention_head_size, attention_window_size=None,  seq_length=None, use_positional_embedding=False, rope_base=None):
         super().__init__()
+
         self.num_attention_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
         self.attention_head_size = attention_head_size
-        self.num_key_value_groups = num_attention_heads // num_key_value_heads
+        self.num_key_value_groups = self.num_attention_heads // self.num_key_value_heads 
         self.attention_window_size = attention_window_size
         self.seq_length = seq_length
-        self.use_positional_embedding = use_positional_embedding
 
-        if use_positional_embedding:
+        self.use_positional_embedding = use_positional_embedding
+        self.rope_base = rope_base
+
+
+        if self.use_positional_embedding:
             self.rotary_emb = RotaryEmbedding(
-                dim=attention_head_size,
-                base=rope_base,
-            )
+                dim=self.attention_head_size,
+                base=self.rope_base)
+
+
+    
 
     def forward(self, query_states, key_states, value_states):
         bsz, q_len, _ = query_states.size()
 
-        # Project and reshape
-        query_states = query_states.view(bsz, q_len, self.num_attention_heads, self.attention_head_size).permute(0, 2, 1, 3)  # [B, H, L, D]
-        key_states   = key_states.view(bsz, q_len, self.num_key_value_heads, self.attention_head_size).permute(0, 2, 1, 3)
-        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.attention_head_size).permute(0, 2, 1, 3)
+        query_states = query_states.view(bsz, q_len, self.num_attention_heads, self.attention_head_size).transpose(1, 2).contiguous()
+
+        key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.attention_head_size).transpose(1, 2).contiguous()
+
+        value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.attention_head_size).transpose(1, 2).contiguous()
 
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
@@ -153,41 +156,30 @@ class Attention(nn.Module):
             cos, sin = self.rotary_emb(query_states)
             query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
-        use_flash = flash_attn_func is not None and query_states.is_cuda
-
-        if use_flash:
-            if self.attention_window_size is not None:
-                attn_outputs = flash_attn_func(
-                    query_states, key_states, value_states,
-                    causal=True,
-                    window_size=(self.attention_window_size, self.attention_window_size),
-                )
-            else:
-                attn_outputs = flash_attn_func(
-                    query_states, key_states, value_states,
-                    causal=True,
-                )
+        query_states = query_states.transpose(1, 2)  
+        key_states = key_states.transpose(1, 2)  # (batch, slen, num_heads, head_dim)
+        value_states = value_states.transpose(1, 2)  # (batch, slen, num_heads, head_dim)
+        
+        if self.attention_window_size is not None:
+            attn_outputs = flash_attn_func(
+                query_states,
+                key_states,
+                value_states,
+                causal=True,
+                window_size=(self.attention_window_size, self.attention_window_size),
+            )
         else:
-            # Manual fallback attention
-            scores = torch.matmul(query_states, key_states.transpose(-1, -2)) / math.sqrt(self.attention_head_size)  # [B, H, L, L]
+            attn_outputs = flash_attn_func(
+                query_states,
+                key_states,
+                value_states,
+                causal=True,
+            )
 
-            if self.attention_window_size is not None:
-                idxs = torch.arange(q_len, device=scores.device)
-                distance = (idxs[None, :] - idxs[:, None]).abs()
-                window_mask = distance > self.attention_window_size
-                scores = scores.masked_fill(window_mask[None, None, :, :], float('-inf'))
+        attn_outputs = attn_outputs.reshape(bsz, q_len, int(self.num_attention_heads * self.attention_head_size)).contiguous()
 
-            # Causal mask
-            causal_mask = torch.triu(torch.ones(q_len, q_len, device=scores.device), diagonal=1).bool()
-            scores = scores.masked_fill(causal_mask[None, None, :, :], float('-inf'))
 
-            probs = F.softmax(scores, dim=-1)
-            attn_outputs = torch.matmul(probs, value_states)  # [B, H, L, D]
-
-        # Back to [B, L, H*D]
-        attn_outputs = attn_outputs.permute(0, 2, 1, 3).reshape(bsz, q_len, -1).contiguous()
         return attn_outputs
-
 
 
 
